@@ -1,0 +1,58 @@
+services:
+  whatsapp-automation:
+    container_name: whatsapp_automation
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      - evolution-api
+    env_file:
+      - .env
+    environment:
+      EVOLUTION_BASE_URL: http://evolution-api:8080
+      WEBHOOK_PUBLIC_URL: http://whatsapp-automation:8080
+      FLASK_HOST: 0.0.0.0
+      FLASK_PORT: 8080
+      LOG_LEVEL: DEBUG
+    ports:
+      - "8080:8080"
+
+  evolution-api:
+    container_name: evolution_api
+    image: evoapicloud/evolution-api:latest
+    restart: always
+    ports:
+      - "8081:8080"
+    env_file:
+      - .env
+    volumes:
+      - evolution_store:/evolution/store
+      - evolution_instances:/evolution/instances
+  postgres:
+    image: postgres:15
+    container_name: evolution_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: evolution_db
+      POSTGRES_USER: evolution_user
+      POSTGRES_PASSWORD: evolution_pass
+    volumes:
+      - evolution_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7
+    container_name: evolution_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - evolution_redis_data:/data
+
+volumes:
+  evolution_store:
+  evolution_instances:
+  evolution_postgres_data:
+  evolution_redis_data:

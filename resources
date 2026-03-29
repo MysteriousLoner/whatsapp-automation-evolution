@@ -1,0 +1,145 @@
+API for setting webhooks for evolution api
+curl --request POST \
+  --url https://evolution-example/webhook/set/{instance} \
+  --header 'Content-Type: application/json' \
+  --header 'apikey: <api-key>' \
+  --data '
+{
+  "enabled": true,
+  "url": "<string>",
+  "webhookByEvents": true,
+  "webhookBase64": true,
+  "events": [
+    "APPLICATION_STARTUP"
+  ]
+}
+'
+Webhooks available:
+APPLICATION_STARTUP, 
+QRCODE_UPDATED, 
+MESSAGES_SET, 
+MESSAGES_UPSERT, 
+MESSAGES_UPDATE, 
+MESSAGES_DELETE, 
+SEND_MESSAGE, 
+CONTACTS_SET, 
+CONTACTS_UPSERT, 
+CONTACTS_UPDATE, 
+PRESENCE_UPDATE, 
+CHATS_SET, 
+CHATS_UPSERT, 
+CHATS_UPDATE, 
+CHATS_DELETE, 
+GROUPS_UPSERT, 
+GROUP_UPDATE, 
+GROUP_PARTICIPANTS_UPDATE, 
+CONNECTION_UPDATE, 
+CALL, 
+NEW_JWT_TOKEN, 
+TYPEBOT_START, 
+TYPEBOT_CHANGE_STATUS 
+{
+  "webhook": {
+    "instanceName": "teste-docs",
+    "webhook": {
+      "url": "https://example.com",
+      "events": [
+        "APPLICATION_STARTUP"
+      ],
+      "enabled": true
+    }
+  }
+}
+
+API for sending messages
+curl --request POST \
+  --url https://evolution-example/message/sendText/{instance} \
+  --header 'Content-Type: application/json' \
+  --header 'apikey: <api-key>' \
+  --data '
+{
+  "number": "<string>",
+  "text": "<string>",
+  "delay": 123,
+  "linkPreview": true,
+  "mentionsEveryOne": true,
+  "mentioned": [
+    "{{remoteJID}}"
+  ],
+  "quoted": {
+    "key": {
+      "id": "<string>"
+    },
+    "message": {
+      "conversation": "<string>"
+    }
+  }
+}
+'
+{
+  "key": {
+    "remoteJid": "553198296801@s.whatsapp.net",
+    "fromMe": true,
+    "id": "BAE594145F4C59B4"
+  },
+  "message": {
+    "extendedTextMessage": {
+      "text": "Olá!"
+    }
+  },
+  "messageTimestamp": "1717689097",
+  "status": "PENDING"
+}
+
+find messages for a chat
+curl --request POST \
+  --url https://evolution-example/chat/findMessages/{instance} \
+  --header 'Content-Type: application/json' \
+  --header 'apikey: <api-key>' \
+  --data '
+{
+  "where": {
+    "key": {
+      "remoteJid": "<string>"
+    }
+  }
+}
+'
+
+get all instances
+curl --request GET \
+  --url https://evolution-example/instance/fetchInstances \
+  --header 'apikey: <api-key>'
+
+  [
+  {
+    "instance": {
+      "instanceName": "example-name",
+      "instanceId": "421a4121-a3d9-40cc-a8db-c3a1df353126",
+      "owner": "553198296801@s.whatsapp.net",
+      "profileName": "Guilherme Gomes",
+      "profilePictureUrl": null,
+      "profileStatus": "This is the profile status.",
+      "status": "open",
+      "serverUrl": "https://example.evolution-api.com",
+      "apikey": "B3844804-481D-47A4-B69C-F14B4206EB56",
+      "integration": {
+        "integration": "WHATSAPP-BAILEYS",
+        "webhook_wa_business": "https://example.evolution-api.com/webhook/whatsapp/db5e11d3-ded5-4d91-b3fb-48272688f206"
+      }
+    }
+  },
+  {
+    "instance": {
+      "instanceName": "teste-docs",
+      "instanceId": "af6c5b7c-ee27-4f94-9ea8-192393746ddd",
+      "status": "close",
+      "serverUrl": "https://example.evolution-api.com",
+      "apikey": "123456",
+      "integration": {
+        "token": "123456",
+        "webhook_wa_business": "https://example.evolution-api.com/webhook/whatsapp/teste-docs"
+      }
+    }
+  }
+]
