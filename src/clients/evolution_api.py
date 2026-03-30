@@ -1,9 +1,11 @@
 import logging
+from collections.abc import Iterable
 from typing import Any
 
 import requests
 
-from src.config import Settings
+from src.clients.event_types import WebhookEventType
+from src.configs.config import Settings
 
 
 class EvolutionApiClient:
@@ -21,6 +23,11 @@ class EvolutionApiClient:
             "Content-Type": "application/json",
             "apikey": self._settings.evolution_api_key,
         }
+
+    def _resolve_instance_name(self, instance_name: str | None = None) -> str:
+        if isinstance(instance_name, str) and instance_name.strip():
+            return instance_name.strip()
+        return self._settings.evolution_instance
 
     def _post(self, endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
         url = self._build_url(endpoint)
@@ -65,15 +72,27 @@ class EvolutionApiClient:
             self._logger.warning("Evolution API returned non-JSON response for %s", endpoint)
             return {"raw": response.text}
 
-    def send_message(self, number: str, text: str, **options: Any) -> dict[str, Any]:
+    def send_message(
+        self,
+        number: str,
+        text: str,
+        instance_name: str | None = None,
+        **options: Any,
+    ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "number": number,
             "text": text,
         }
         payload.update(options)
-        return self._post(f"/message/sendText/{self._settings.evolution_instance}", payload)
+        resolved_instance = self._resolve_instance_name(instance_name)
+        return self._post(f"/message/sendText/{resolved_instance}", payload)
 
-    def find_messages(self, remote_jid: str, limit: int | None = None) -> Any:
+    def find_messages(
+        self,
+        remote_jid: str,
+        limit: int | None = None,
+        instance_name: str | None = None,
+    ) -> Any:
         payload = {
             "where": {
                 "key": {
@@ -81,7 +100,8 @@ class EvolutionApiClient:
                 }
             }
         }
-        response = self._post(f"/chat/findMessages/{self._settings.evolution_instance}", payload)
+        resolved_instance = self._resolve_instance_name(instance_name)
+        response = self._post(f"/chat/findMessages/{resolved_instance}", payload)
 
         if limit is None:
             return response
@@ -97,13 +117,30 @@ class EvolutionApiClient:
 
         return response
 
-    def set_webhook(self, url: str, events: list[str], enabled: bool = True) -> dict[str, Any]:
+    def _serialize_webhook_events(self, events: Iterable[WebhookEventType | str]) -> list[str]:
+        serialized: list[str] = []
+        for event in events:
+            if isinstance(event, WebhookEventType):
+                serialized.append(event.value)
+                continue
+
+            if isinstance(event, str) and event.strip():
+                serialized.append(event.strip().upper())
+
+        return serialized
+
+    def set_webhook(
+        self,
+        url: str,
+        events: Iterable[WebhookEventType | str],
+        enabled: bool = True,
+    ) -> dict[str, Any]:
         payload = {
             "enabled": enabled,
             "url": url,
             "webhookByEvents": self._settings.webhook_by_events,
             "webhookBase64": self._settings.webhook_base64,
-            "events": events,
+            "events": self._serialize_webhook_events(events),
         }
         return self._post(f"/webhook/set/{self._settings.evolution_instance}", payload)
 
@@ -137,7 +174,7 @@ class EvolutionApiClient:
         self,
         instance_name: str,
         url: str,
-        events: list[str],
+        events: Iterable[WebhookEventType | str],
         enabled: bool = True,
     ) -> dict[str, Any]:
         """Set webhook for a specific instance."""
@@ -147,7 +184,7 @@ class EvolutionApiClient:
                 "url": url,
                 "webhookByEvents": self._settings.webhook_by_events,
                 "webhookBase64": self._settings.webhook_base64,
-                "events": events,
+                "events": self._serialize_webhook_events(events),
             }
         }
         return self._post(f"/webhook/set/{instance_name}", payload)

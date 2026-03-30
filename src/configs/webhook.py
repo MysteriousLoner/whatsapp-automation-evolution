@@ -5,7 +5,7 @@ from typing import Any
 
 from flask import Blueprint, jsonify, request
 
-from src.push_event_config import dispatch_event
+from src.configs.push_event_config import dispatch_event
 from src.services.session_manager import SessionManager
 
 

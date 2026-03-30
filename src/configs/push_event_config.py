@@ -1,6 +1,8 @@
 import logging
 from typing import Any, Callable
 
+from src.clients.event_types import WebhookEventType
+from src.handlers.on_message_received import on_message_received
 from src.services.session_manager import SessionManager
 
 
@@ -10,7 +12,8 @@ logger = logging.getLogger(__name__)
 def _extract_event(payload: dict[str, Any]) -> str | None:
     event = payload.get("event") or payload.get("type")
     if isinstance(event, str) and event.strip():
-        return event.strip().upper()
+        normalized = event.strip().upper().replace(".", "_").replace("-", "_")
+        return normalized
     return None
 
 
@@ -34,6 +37,20 @@ def _dig_message_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
             return candidate
 
     return {}
+
+
+def _extract_instance_name(payload: dict[str, Any]) -> str | None:
+    direct_instance = payload.get("instance")
+    if isinstance(direct_instance, str) and direct_instance.strip():
+        return direct_instance.strip()
+
+    data = payload.get("data")
+    if isinstance(data, dict):
+        nested_instance = data.get("instance") or data.get("instanceName")
+        if isinstance(nested_instance, str) and nested_instance.strip():
+            return nested_instance.strip()
+
+    return None
 
 
 def _extract_text(message_payload: dict[str, Any]) -> str:
@@ -68,30 +85,61 @@ def handle_messages_upsert(payload: dict[str, Any], session_manager: SessionMana
         logger.warning("MESSAGES_UPSERT ignored: missing remoteJid")
         return {"handled": False, "reason": "missing_remote_jid"}
 
-    session = session_manager.create_or_update_session(jid.strip(), message_payload)
+    instance_name = _extract_instance_name(payload)
+    session = session_manager.create_or_update_session(
+        jid.strip(),
+        message_payload,
+        instance_name=instance_name,
+    )
     extracted_text = _extract_text(message_payload)
 
     logger.info(
-        "Message received from %s: '%s'",
+        "Message received from %s (instance=%s): '%s'",
         session.jid,
+        session.instance_name,
         extracted_text[:100] if extracted_text else "(no text)",
     )
 
+    try:
+        logic_result = on_message_received(
+            session=session,
+            message_payload=message_payload,
+            extracted_text=extracted_text,
+        )
+    except Exception:
+        logger.exception("Error while running on_message_received for jid=%s", session.jid)
+        return {
+            "handled": False,
+            "event": WebhookEventType.MESSAGES_UPSERT.value,
+            "reason": "handler_exception",
+            "jid": session.jid,
+            "instance_name": session.instance_name,
+        }
+
+    if not logic_result.get("handled"):
+        return {
+            "handled": False,
+            "event": WebhookEventType.MESSAGES_UPSERT.value,
+            **logic_result,
+        }
+
     return {
         "handled": True,
-        "event": "MESSAGES_UPSERT",
+        "event": WebhookEventType.MESSAGES_UPSERT.value,
         "jid": session.jid,
+        "instance_name": session.instance_name,
         "message": extracted_text,
+        **logic_result,
     }
 
 
-EVENT_HANDLERS: dict[str, Callable[[dict[str, Any], SessionManager], dict[str, Any]]] = {
-    "MESSAGES_UPSERT": handle_messages_upsert,
+EVENT_HANDLERS: dict[WebhookEventType, Callable[[dict[str, Any], SessionManager], dict[str, Any]]] = {
+    WebhookEventType.MESSAGES_UPSERT: handle_messages_upsert,
 }
 
 
 def enabled_events() -> list[str]:
-    return sorted(EVENT_HANDLERS.keys())
+    return sorted(event_type.value for event_type in EVENT_HANDLERS.keys())
 
 
 def dispatch_event(payload: dict[str, Any], session_manager: SessionManager) -> dict[str, Any]:
@@ -99,9 +147,14 @@ def dispatch_event(payload: dict[str, Any], session_manager: SessionManager) -> 
     if event is None:
         return {"handled": False, "reason": "missing_event"}
 
-    handler = EVENT_HANDLERS.get(event)
-    if handler is None:
+    event_type = WebhookEventType.from_raw(event)
+    if event_type is None:
         logger.info("Ignoring unmapped webhook event: %s", event)
         return {"handled": False, "reason": "unmapped_event", "event": event}
+
+    handler = EVENT_HANDLERS.get(event_type)
+    if handler is None:
+        logger.info("Ignoring unhandled webhook event: %s", event_type.value)
+        return {"handled": False, "reason": "unmapped_event", "event": event_type.value}
 
     return handler(payload, session_manager)

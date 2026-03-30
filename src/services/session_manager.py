@@ -11,7 +11,12 @@ class SessionManager:
         self._sessions: dict[str, WhatsAppSession] = {}
         self._lock = threading.Lock()
 
-    def create_or_update_session(self, jid: str, message_payload: dict[str, Any]) -> WhatsAppSession:
+    def create_or_update_session(
+        self,
+        jid: str,
+        message_payload: dict[str, Any],
+        instance_name: str | None = None,
+    ) -> WhatsAppSession:
         with self._lock:
             session = self._sessions.get(jid)
             if session is None:
@@ -19,11 +24,12 @@ class SessionManager:
                     jid=jid,
                     latest_message=message_payload,
                     api_client=self._api_client,
+                    instance_name=instance_name.strip() if instance_name and instance_name.strip() else None,
                     destroy_callback=self.destroy_session,
                 )
                 self._sessions[jid] = session
             else:
-                session.update_message(message_payload)
+                session.update_message(message_payload, instance_name=instance_name)
 
             return session
 
@@ -40,6 +46,7 @@ class SessionManager:
             return [
                 {
                     "jid": session.jid,
+                    "instance_name": session.instance_name,
                     "created_at": session.created_at.isoformat(),
                     "updated_at": session.updated_at.isoformat(),
                     "latest_message": session.latest_message,

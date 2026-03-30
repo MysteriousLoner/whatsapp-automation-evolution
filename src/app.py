@@ -4,10 +4,11 @@ from typing import Any
 from flask import Flask, jsonify, request
 
 from src.clients.evolution_api import EvolutionApiClient
-from src.config import build_webhook_callback_url, load_settings
-from src.handlers.admin import create_admin_blueprint
-from src.handlers.webhook import create_webhook_blueprint
-from src.push_event_config import enabled_events
+from src.clients.event_types import WebhookEventType
+from src.configs.admin import create_admin_blueprint
+from src.configs.config import build_webhook_callback_url, load_settings
+from src.configs.push_event_config import enabled_events
+from src.configs.webhook import create_webhook_blueprint
 from src.services.session_manager import SessionManager
 
 
@@ -17,9 +18,10 @@ logger = logging.getLogger(__name__)
 def sync_webhooks_for_all_instances(
 	api_client: EvolutionApiClient,
 	callback_url: str,
-	events: list[str],
+	events: list[WebhookEventType | str],
 ) -> dict[str, Any]:
 	"""Fetch all instances and bind webhooks to each one."""
+	event_names = [event.value if isinstance(event, WebhookEventType) else str(event) for event in events]
 	try:
 		instances = api_client.fetch_all_instances()
 		logger.debug("Fetched %d instances", len(instances))
@@ -61,7 +63,7 @@ def sync_webhooks_for_all_instances(
 	return {
 		"success": True,
 		"callback_url": callback_url,
-		"events": events,
+		"events": event_names,
 		"total_instances": len(instances),
 		"configured": len([r for r in results if r.get("success")]),
 		"results": results,
