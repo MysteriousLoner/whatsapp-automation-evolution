@@ -1,0 +1,112 @@
+[
+  {
+    "location": "Kuala Lumpur",
+    "address": "Unit 12-08, Jalan Tun Razak, 50400 Kuala Lumpur",
+    "price_per_month_myr": 2800,
+    "availability": "Available from 2026-04-15",
+    "description": "Fully furnished 2-bedroom unit near MRT and shopping mall.",
+    "facilities": ["Swimming pool", "Gym", "24-hour security", "Covered parking"],
+    "property_type": "condominium",
+    "owner_remarks": "Preferred tenants with stable income; minimum 1-year tenancy.",
+    "not_allowed": ["Smoking indoors", "Pets", "Short-term subletting"]
+  },
+  {
+    "location": "Petaling Jaya, Selangor",
+    "address": "No. 22, Jalan SS 2/45, 47300 Petaling Jaya, Selangor",
+    "price_per_month_myr": 3500,
+    "availability": "Available now",
+    "description": "Corner terrace house with renovated kitchen and small garden.",
+    "facilities": ["Auto gate", "Water heater", "Air conditioning", "2-car porch"],
+    "property_type": "house",
+    "owner_remarks": "Family tenants preferred.",
+    "not_allowed": ["Smoking indoors", "Wall drilling without approval"]
+  },
+  {
+    "location": "George Town, Penang",
+    "address": "Unit 09-03, Persiaran Gurney, 10250 George Town, Penang",
+    "price_per_month_myr": 3200,
+    "availability": "Available from 2026-05-01",
+    "description": "Sea-view condominium with modern furniture and balcony.",
+    "facilities": ["Infinity pool", "Gym", "BBQ area", "Security access card"],
+    "property_type": "condominium",
+    "owner_remarks": "No heavy cooking preferred.",
+    "not_allowed": ["Pets", "Smoking", "Parties after 10 PM"]
+  },
+  {
+    "location": "Johor Bahru, Johor",
+    "address": "No. 14, Jalan Molek 2/3, Taman Molek, 81100 Johor Bahru",
+    "price_per_month_myr": 2400,
+    "availability": "Available now",
+    "description": "Double-storey house near schools and AEON Tebrau.",
+    "facilities": ["Auto gate", "Basic furnishings", "Water filter", "Store room"],
+    "property_type": "house",
+    "owner_remarks": "Tenant must maintain cleanliness of compound.",
+    "not_allowed": ["Subletting", "Illegal activities", "Keeping noisy pets"]
+  },
+  {
+    "location": "Shah Alam, Selangor",
+    "address": "Unit A-18-11, Seksyen 13, 40100 Shah Alam, Selangor",
+    "price_per_month_myr": 2100,
+    "availability": "Available from 2026-04-01",
+    "description": "Studio condominium suitable for students or young professionals.",
+    "facilities": ["Gym", "Laundrette", "24-hour security", "Wi-Fi ready"],
+    "property_type": "condominium",
+    "owner_remarks": "Single or couple preferred.",
+    "not_allowed": ["Smoking", "Pets", "More than 2 occupants"]
+  },
+  {
+    "location": "Cyberjaya, Selangor",
+    "address": "Unit C-07-05, Persiaran Multimedia, 63000 Cyberjaya",
+    "price_per_month_myr": 2600,
+    "availability": "Available now",
+    "description": "3-bedroom condo with lake view and close to office hubs.",
+    "facilities": ["Pool", "Gym", "Playground", "Multi-purpose hall"],
+    "property_type": "condominium",
+    "owner_remarks": "Ideal for working professionals.",
+    "not_allowed": ["Smoking indoors", "Subletting room-by-room"]
+  },
+  {
+    "location": "Ipoh, Perak",
+    "address": "No. 8, Jalan Medan Ipoh 6, 31400 Ipoh, Perak",
+    "price_per_month_myr": 1800,
+    "availability": "Available from 2026-04-20",
+    "description": "Single-storey house in a quiet neighborhood with spacious living hall.",
+    "facilities": ["Ceiling fans", "Kitchen cabinets", "Car porch", "Nearby park"],
+    "property_type": "house",
+    "owner_remarks": "Long-term tenant preferred.",
+    "not_allowed": ["Pets", "Smoking indoors", "Home business without consent"]
+  },
+  {
+    "location": "Kota Kinabalu, Sabah",
+    "address": "Unit 15-06, Jalan Coastal, 88000 Kota Kinabalu, Sabah",
+    "price_per_month_myr": 2900,
+    "availability": "Available now",
+    "description": "Partly furnished condo with city and sea view.",
+    "facilities": ["Swimming pool", "Gym", "Security", "One parking bay"],
+    "property_type": "condominium",
+    "owner_remarks": "Utilities excluded from rent.",
+    "not_allowed": ["Smoking", "Pets over 5kg", "Loud gatherings"]
+  },
+  {
+    "location": "Kuching, Sarawak",
+    "address": "No. 31, Jalan Rock 3A, 93200 Kuching, Sarawak",
+    "price_per_month_myr": 2200,
+    "availability": "Available from 2026-05-10",
+    "description": "Semi-detached house with backyard, suitable for family.",
+    "facilities": ["Air conditioning", "Water heater", "Auto gate", "2-car parking"],
+    "property_type": "house",
+    "owner_remarks": "Tenant responsible for minor repairs under RM150.",
+    "not_allowed": ["Smoking indoors", "Subletting", "Renovation without permission"]
+  },
+  {
+    "location": "Melaka City, Melaka",
+    "address": "Unit B-10-02, Jalan Melaka Raya 8, 75000 Melaka",
+    "price_per_month_myr": 1950,
+    "availability": "Available now",
+    "description": "Cozy condominium near tourist belt and business district.",
+    "facilities": ["Pool", "Security guard", "Lift access card", "Covered parking"],
+    "property_type": "condominium",
+    "owner_remarks": "Clean and tidy tenant preferred.",
+    "not_allowed": ["Pets", "Smoking indoors", "Short-term rental (Airbnb)"]
+  }
+]

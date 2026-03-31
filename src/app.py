@@ -7,6 +7,7 @@ from src.clients.evolution_api import EvolutionApiClient
 from src.clients.event_types import WebhookEventType
 from src.configs.admin import create_admin_blueprint
 from src.configs.config import build_webhook_callback_url, load_settings
+from src.configs.contracts import create_contract_blueprint
 from src.configs.push_event_config import enabled_events
 from src.configs.webhook import create_webhook_blueprint
 from src.services.session_manager import SessionManager
@@ -136,6 +137,7 @@ def create_app() -> Flask:
 			auth_key=settings.authentication_api_key,
 		)
 	)
+	app.register_blueprint(create_contract_blueprint(session_manager, settings.webhook_public_url))
 
 	@app.get("/health")
 	def health() -> tuple[Any, int]:

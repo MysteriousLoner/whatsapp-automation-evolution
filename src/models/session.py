@@ -14,6 +14,11 @@ class WhatsAppSession:
     api_client: EvolutionApiClient
     instance_name: str | None = None
     destroy_callback: Callable[[str], bool] | None = None
+    chat_history: list[dict[str, str]] = field(default_factory=list)
+    selected_property: dict[str, Any] | None = None
+    awaiting_contract_signature: bool = False
+    contract_token: str | None = None
+    signed_by: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -30,6 +35,10 @@ class WhatsAppSession:
     def send_message(self, text: str, **options: Any) -> dict[str, Any]:
         resolved_instance = options.pop("instance_name", self.instance_name)
         return self.api_client.send_message(self.jid, text, instance_name=resolved_instance, **options)
+
+    def add_chat_entry(self, role: str, content: str) -> None:
+        self.chat_history.append({"role": role, "content": content})
+        self.updated_at = datetime.now(timezone.utc)
 
     def destroy(self) -> bool:
         if self.destroy_callback is None:

@@ -37,6 +37,13 @@ class SessionManager:
         with self._lock:
             return self._sessions.get(jid)
 
+    def get_session_by_contract_token(self, token: str) -> WhatsAppSession | None:
+        with self._lock:
+            for session in self._sessions.values():
+                if session.contract_token == token:
+                    return session
+            return None
+
     def destroy_session(self, jid: str) -> bool:
         with self._lock:
             return self._sessions.pop(jid, None) is not None
@@ -47,6 +54,10 @@ class SessionManager:
                 {
                     "jid": session.jid,
                     "instance_name": session.instance_name,
+                    "chat_history_count": len(session.chat_history),
+                    "awaiting_contract_signature": session.awaiting_contract_signature,
+                    "contract_token": session.contract_token,
+                    "selected_property": session.selected_property,
                     "created_at": session.created_at.isoformat(),
                     "updated_at": session.updated_at.isoformat(),
                     "latest_message": session.latest_message,
