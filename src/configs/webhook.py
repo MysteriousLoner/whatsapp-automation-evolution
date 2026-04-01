@@ -6,6 +6,7 @@ from typing import Any
 from flask import Blueprint, jsonify, request
 
 from src.configs.push_event_config import dispatch_event
+from src.middleware.server_uptime_filter import should_skip_processing
 from src.services.session_manager import SessionManager
 
 
@@ -25,6 +26,11 @@ def create_webhook_blueprint(session_manager: SessionManager, auth_key: str) -> 
     def receive_webhook() -> tuple[Any, int]:
         logger.debug("Webhook request received from %s", request.remote_addr)
         logger.debug("Request headers: %s", dict(request.headers))
+        
+        # Check if request was made before server start time
+        if should_skip_processing():
+            logger.debug("Webhook request skipped: message received before server startup")
+            return jsonify({"ok": True, "result": {"handled": False, "reason": "message_before_server_start"}}), 200
         
         # Note: API key is NOT required for webhook receipts since the webhook URL registration
         # itself is authenticated. Once registered, any requests to this URL are trusted.

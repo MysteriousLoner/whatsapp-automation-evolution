@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import logging
-import os
+import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from src.models.session import WhatsAppSession
 from src.services.query_llm import QueryLLM
@@ -13,24 +15,118 @@ from src.services.query_llm import QueryLLM
 
 logger = logging.getLogger(__name__)
 
-UNITS_FILE = Path(__file__).resolve().parents[1] / "static resources" / "units.json"
+GYM_INFO_FILE = Path(__file__).resolve().parents[1] / "static resources" / "information.json"
 
-SYSTEM_PROMPT = (
-    "You are a Malaysian property rental assistant. "
-    "Your job is to understand the client's needs and recommend the most suitable property from the provided units data. "
-    "Always highlight owner red lines from the property's not_allowed field before confirmation. "
-    "When user clearly confirms a property choice, set client_confirmed=true. "
-    "Respond in valid JSON only with keys: assistant_reply (string), selected_property_index (integer or null), client_confirmed (boolean)."
-    "always stir the conversation back to the topic of rental if the user is going off topics."
-)
+DEFAULT_TIMEZONE = "Asia/Kuala_Lumpur"
 
 
-def _load_units() -> list[dict[str, Any]]:
-    with UNITS_FILE.open("r", encoding="utf-8") as f:
+def _load_gym_info() -> dict[str, Any]:
+    with GYM_INFO_FILE.open("r", encoding="utf-8") as f:
         data = json.load(f)
-    if not isinstance(data, list):
-        raise ValueError("units.json must be a JSON array")
-    return [item for item in data if isinstance(item, dict)]
+    if not isinstance(data, dict):
+        raise ValueError("information.json must be a JSON object")
+    return data
+
+
+def _current_request_time() -> datetime:
+    return datetime.now(ZoneInfo(DEFAULT_TIMEZONE))
+
+
+def _parse_opening_hours(opening_hours: str) -> tuple[int, int] | None:
+    # Supports hour formats like "7:00AM to 10.30PM daily".
+    match = re.search(
+        r"(\d{1,2}[:.]\d{2}\s*[APMapm]{2})\s*to\s*(\d{1,2}[:.]\d{2}\s*[APMapm]{2})",
+        opening_hours,
+    )
+    if not match:
+        return None
+
+    def _to_minutes(token: str) -> int:
+        normalized = token.strip().upper().replace(".", ":")
+        dt = datetime.strptime(normalized, "%I:%M%p")
+        return dt.hour * 60 + dt.minute
+
+    try:
+        return (_to_minutes(match.group(1)), _to_minutes(match.group(2)))
+    except ValueError:
+        return None
+
+
+def _is_gym_open(request_time: datetime, opening_hours: str) -> bool | None:
+    parsed = _parse_opening_hours(opening_hours)
+    if parsed is None:
+        return None
+
+    start_minutes, end_minutes = parsed
+    current_minutes = request_time.hour * 60 + request_time.minute
+    return start_minutes <= current_minutes <= end_minutes
+
+
+def _extract_coordinates_from_maps_url(url: str) -> tuple[float, float] | None:
+    # Google Maps links commonly include coordinates after '@' like '@2.714794,101.9128369'.
+    match = re.search(r"@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)", url)
+    if not match:
+        return None
+
+    try:
+        return (float(match.group(1)), float(match.group(2)))
+    except ValueError:
+        return None
+
+
+def _should_send_location(user_text: str) -> bool:
+    normalized = user_text.lower()
+    triggers = (
+        "location",
+        "where",
+        "address",
+        "map",
+        "maps",
+        "direction",
+        "directions",
+        "located",
+    )
+    return any(token in normalized for token in triggers)
+
+
+def _build_system_prompt(
+    gym_info: dict[str, Any],
+    request_time: datetime,
+    is_first_user_message: bool,
+    is_gym_closed: bool,
+) -> str:
+    gym_name = str(gym_info.get("name", "Maximus Gym")).strip() or "Maximus Gym"
+    opening_hours = str(gym_info.get("opening_hours", "Not provided")).strip() or "Not provided"
+    location = str(gym_info.get("location", "Not provided")).strip() or "Not provided"
+    facebook = str(gym_info.get("facebook", "Not provided")).strip() or "Not provided"
+    price_per_entry = str(gym_info.get("price_per_entry", "Not provided")).strip() or "Not provided"
+    member_price_per_month = str(gym_info.get("member_price_per_month", "Not provided")).strip() or "Not provided"
+    request_time_text = request_time.strftime("%Y-%m-%d %I:%M %p (%Z)")
+
+    first_message_rules: list[str] = []
+    if is_first_user_message and is_gym_closed:
+        first_message_rules.append(
+            "Because this is the customer's first message and the gym is currently closed, "
+            "start your reply by reminding them the gym is closed now and share opening hours. "
+        )
+    if is_first_user_message:
+        first_message_rules.append(
+            "Because this is the customer's first message, include opening hours, walk-in fee, and monthly membership fee, "
+            "then ask if they want to apply for membership. "
+        )
+    first_message_rule_text = "".join(first_message_rules)
+
+    return (
+        f"You are a friendly and concise customer service assistant for {gym_name}. "
+        "Answer only with information that is grounded in the provided gym details and conversation context. "
+        "If the customer asks something unknown, be transparent and suggest contacting the gym Facebook page. "
+        "Match the customer's language from their message (English, Bahasa Melayu, or Chinese) whenever possible. "
+        f"Current request time context: {request_time_text}. "
+        f"Gym details: name={gym_name}; opening_hours={opening_hours}; location={location}; facebook={facebook}; "
+        f"price_per_entry={price_per_entry}; member_price_per_month={member_price_per_month}. "
+        f"{first_message_rule_text}"
+        "Respond in valid JSON only with this schema: {\"assistant_reply\": string}."
+    )
 
 
 def _history_as_text(history: list[dict[str, str]]) -> str:
@@ -94,9 +190,28 @@ def on_message_received(
             "jid": session.jid,
             "message_id": message_id,
         }
+ 
+    allowed_jids = {
+        "60122201096@s.whatsapp.net",
+        "60123226431@s.whatsapp.net",
+    }
+    if session.jid not in allowed_jids:
+        return {
+            "handled": False,
+            "reason": "jid_not_allowed",
+            "jid": session.jid,
+            "message_id": message_id,
+        }
     
     logger.info("on_message_received: jid=%s message_id=%s", session.jid, message_id)
+    is_first_user_message = not any(entry.get("role") == "user" for entry in session.chat_history)
     session.add_chat_entry("user", extracted_text)
+
+    gym_info = _load_gym_info()
+    request_time = _current_request_time()
+    opening_hours = str(gym_info.get("opening_hours", "")).strip()
+    gym_open = _is_gym_open(request_time, opening_hours)
+    is_gym_closed = gym_open is False
 
     if session.awaiting_contract_signature and session.contract_token:
         contract_url = _build_contract_url(session.contract_token)
@@ -114,21 +229,27 @@ def on_message_received(
             "state": "awaiting_signature",
         }
 
-    units = _load_units()
     history_text = _history_as_text(session.chat_history)
-
     llm = QueryLLM()
+    system_prompt = _build_system_prompt(
+        gym_info=gym_info,
+        request_time=request_time,
+        is_first_user_message=is_first_user_message,
+        is_gym_closed=is_gym_closed,
+    )
+    request_time_text = request_time.strftime("%Y-%m-%d %I:%M %p (%Z)")
     user_prompt = (
         "Conversation history:\n"
         f"{history_text}\n\n"
-        "Units data:\n"
-        f"{json.dumps(units, ensure_ascii=False)}\n\n"
-        "Decide the best next assistant reply based on user intent. "
+        "Gym information:\n"
+        f"{json.dumps(gym_info, ensure_ascii=False)}\n\n"
+        f"Request time context: {request_time_text}\n\n"
+        "Write the best next customer-service reply based on user intent. "
         "Return strict JSON only."
     )
     llm_result = llm.query(
         user_input=user_prompt,
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=system_prompt,
         temperature=0.2,
         max_tokens=500,
     )
@@ -165,13 +286,37 @@ def on_message_received(
             client_confirmed = confirmed_raw
 
     if not assistant_reply:
-        assistant_reply = content.strip() if isinstance(content, str) and content.strip() else "Could you share more details about your preferred location and budget?"
+        assistant_reply = content.strip() if isinstance(content, str) and content.strip() else "Thanks for reaching out to Maximus Gym. How can I help you today?"
 
-    if selected_property_index is not None and 0 <= selected_property_index < len(units):
-        session.selected_property = units[selected_property_index]
+    if is_first_user_message and is_gym_closed and opening_hours:
+        closed_reminder = (
+            f"Quick note: Maximus Gym is currently closed now. Opening hours are {opening_hours}."
+        )
+        if "closed" not in assistant_reply.lower():
+            assistant_reply = f"{closed_reminder} {assistant_reply}"
+
+    if selected_property_index is not None:
+        logger.debug("selected_property_index ignored for gym flow: %s", selected_property_index)
 
     session.send_message(assistant_reply)
     session.add_chat_entry("assistant", assistant_reply)
+
+    if _should_send_location(extracted_text):
+        gym_name = str(gym_info.get("name", "Maximus Gym")).strip() or "Maximus Gym"
+        location_value = str(gym_info.get("location", "")).strip()
+        coordinates = _extract_coordinates_from_maps_url(location_value)
+
+        if coordinates is not None:
+            latitude, longitude = coordinates
+            try:
+                session.send_location(
+                    name=gym_name,
+                    address=gym_name,
+                    latitude=latitude,
+                    longitude=longitude,
+                )
+            except Exception:
+                logger.exception("Failed to send location pin for jid=%s", session.jid)
 
     if client_confirmed and session.selected_property is not None:
         session.contract_token = session.contract_token or uuid4().hex

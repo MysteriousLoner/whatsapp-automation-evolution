@@ -36,6 +36,25 @@ class WhatsAppSession:
         resolved_instance = options.pop("instance_name", self.instance_name)
         return self.api_client.send_message(self.jid, text, instance_name=resolved_instance, **options)
 
+    def send_location(
+        self,
+        name: str,
+        address: str,
+        latitude: float,
+        longitude: float,
+        **options: Any,
+    ) -> dict[str, Any]:
+        resolved_instance = options.pop("instance_name", self.instance_name)
+        return self.api_client.send_location(
+            self.jid,
+            name,
+            address,
+            latitude,
+            longitude,
+            instance_name=resolved_instance,
+            **options,
+        )
+
     def add_chat_entry(self, role: str, content: str) -> None:
         self.chat_history.append({"role": role, "content": content})
         self.updated_at = datetime.now(timezone.utc)

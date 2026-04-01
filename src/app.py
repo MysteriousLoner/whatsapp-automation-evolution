@@ -10,6 +10,7 @@ from src.configs.config import build_webhook_callback_url, load_settings
 from src.configs.contracts import create_contract_blueprint
 from src.configs.push_event_config import enabled_events
 from src.configs.webhook import create_webhook_blueprint
+from src.middleware.server_uptime_filter import init_server_uptime_filter
 from src.services.session_manager import SessionManager
 
 
@@ -81,6 +82,9 @@ def create_app() -> Flask:
 
 	logger = logging.getLogger("whatsapp-automation")
 	app = Flask(__name__)
+	
+	# Initialize server uptime filter middleware
+	init_server_uptime_filter(app)
 	
 	# Reduce Flask/Werkzeug debug noise if log level is not DEBUG
 	if settings.log_level != "DEBUG":

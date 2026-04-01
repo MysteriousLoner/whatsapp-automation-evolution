@@ -143,3 +143,52 @@ curl --request GET \
     }
   }
 ]
+
+API for location:
+curl --request POST \
+  --url https://http:8080//localhost:8080/message/sendLocation/{instance} \
+  --header 'Content-Type: application/json' \
+  --header 'apikey: <api-key>' \
+  --data '
+{
+  "number": "<string>",
+  "name": "<string>",
+  "address": "<string>",
+  "latitude": 123,
+  "longitude": 123,
+  "delay": 123,
+  "linkPreview": true,
+  "mentionsEveryOne": true,
+  "mentioned": [
+    "{{remoteJID}}"
+  ],
+  "quoted": {
+    "key": {
+      "id": "<string>"
+    },
+    "message": {
+      "conversation": "<string>"
+    }
+  }
+}
+'
+
+{
+  "key": {
+    "remoteJid": "553198296801@s.whatsapp.net",
+    "fromMe": true,
+    "id": "BAE51B6FF4470AF9"
+  },
+  "message": {
+    "locationMessage": {
+      "degreesLatitude": -19.93359,
+      "degreesLongitude": -43.93851,
+      "name": "Palácio da Liberdade",
+      "address": "Praça da Liberdade, Belo Horizonte, MG 30140-050",
+      "contextInfo": {}
+    }
+  },
+  "messageTimestamp": "1717779606",
+  "status": "PENDING"
+}
+

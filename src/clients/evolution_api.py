@@ -87,6 +87,27 @@ class EvolutionApiClient:
         resolved_instance = self._resolve_instance_name(instance_name)
         return self._post(f"/message/sendText/{resolved_instance}", payload)
 
+    def send_location(
+        self,
+        number: str,
+        name: str,
+        address: str,
+        latitude: float,
+        longitude: float,
+        instance_name: str | None = None,
+        **options: Any,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "number": number,
+            "name": name,
+            "address": address,
+            "latitude": latitude,
+            "longitude": longitude,
+        }
+        payload.update(options)
+        resolved_instance = self._resolve_instance_name(instance_name)
+        return self._post(f"/message/sendLocation/{resolved_instance}", payload)
+
     def find_messages(
         self,
         remote_jid: str,
