@@ -17,9 +17,7 @@ def _is_authorized(header_value: str | None, expected_key: str) -> bool:
     return header_value.strip() == expected_key
 
 
-def _resolve_api_key(expected_key: str) -> str | None:
-    from flask import request
-
+def _resolve_api_key() -> str | None:
     return (
         request.headers.get("apikey")
         or request.headers.get("x-api-key")
@@ -35,7 +33,7 @@ def create_admin_blueprint(
 
     @admin_bp.get("/admin/sessions")
     def list_sessions() -> tuple[Any, int]:
-        provided_key = _resolve_api_key(auth_key)
+        provided_key = _resolve_api_key()
         if not _is_authorized(provided_key, auth_key):
             return jsonify({"ok": False, "error": "Unauthorized"}), 401
 
@@ -43,7 +41,7 @@ def create_admin_blueprint(
 
     @admin_bp.delete("/admin/sessions/<path:jid>")
     def destroy_session(jid: str) -> tuple[Any, int]:
-        provided_key = _resolve_api_key(auth_key)
+        provided_key = _resolve_api_key()
         if not _is_authorized(provided_key, auth_key):
             return jsonify({"ok": False, "error": "Unauthorized"}), 401
 
@@ -53,13 +51,9 @@ def create_admin_blueprint(
 
         return jsonify({"ok": True, "jid": jid, "destroyed": True}), 200
 
-        @admin_bp.get("/admin/contracts")
-        def contracts_dashboard() -> tuple[str, int]:
-                provided_key = _resolve_api_key(auth_key)
-                if not _is_authorized(provided_key, auth_key):
-                        return ("Unauthorized", 401)
-
-                html = """
+    @admin_bp.get("/admin/contracts")
+    def contracts_dashboard() -> tuple[str, int]:
+        html = """
 <!doctype html>
 <html lang='en'>
 <head>
@@ -260,16 +254,12 @@ def create_admin_blueprint(
     </script>
 </body>
 </html>
-                """
-                return html, 200
+    """
+        return html, 200
 
-        @admin_bp.get("/admin/contracts/data")
-        def list_contracts() -> tuple[Any, int]:
-                provided_key = _resolve_api_key(auth_key)
-                if not _is_authorized(provided_key, auth_key):
-                        return jsonify({"ok": False, "error": "Unauthorized"}), 401
-
-                contracts = session_manager.contract_store.list_contracts(limit=300)
-                return jsonify({"ok": True, "contracts": contracts}), 200
+    @admin_bp.get("/admin/contracts/data")
+    def list_contracts() -> tuple[Any, int]:
+        contracts = session_manager.contract_store.list_contracts(limit=300)
+        return jsonify({"ok": True, "contracts": contracts}), 200
 
     return admin_bp

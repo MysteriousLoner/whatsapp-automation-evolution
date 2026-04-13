@@ -1,6 +1,5 @@
 services:
   whatsapp-automation:
-    container_name: whatsapp_automation
     build:
       context: .
       dockerfile: Dockerfile
@@ -16,14 +15,13 @@ services:
       FLASK_PORT: 8080
       LOG_LEVEL: DEBUG
     ports:
-      - "8080:8080"
+      - "8093:8080"
 
   evolution-api:
-    container_name: evolution_api
     image: evoapicloud/evolution-api:latest
     restart: always
     ports:
-      - "8081:8080"
+      - "8094:8080"
     env_file:
       - .env
     volumes:
@@ -31,7 +29,6 @@ services:
       - evolution_instances:/evolution/instances
   postgres:
     image: postgres:15
-    container_name: evolution_postgres
     restart: always
     environment:
       POSTGRES_DB: evolution_db
@@ -40,14 +37,13 @@ services:
     volumes:
       - evolution_postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5434:5432"
 
   redis:
     image: redis:7
-    container_name: evolution_redis
     restart: always
     ports:
-      - "6379:6379"
+      - "6381:6379"
     volumes:
       - evolution_redis_data:/data
 

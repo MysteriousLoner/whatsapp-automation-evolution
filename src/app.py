@@ -1,4 +1,6 @@
 import logging
+import threading
+import time
 from typing import Any
 
 from flask import Flask, jsonify, request
@@ -73,6 +75,39 @@ def sync_webhooks_for_all_instances(
 	}
 
 
+def _sync_webhooks_with_retries(
+	api_client: EvolutionApiClient,
+	callback_url: str,
+	events: list[WebhookEventType | str],
+	max_attempts: int = 12,
+	initial_delay_seconds: float = 2.0,
+) -> None:
+	delay_seconds = initial_delay_seconds
+	for attempt in range(1, max_attempts + 1):
+		sync_result = sync_webhooks_for_all_instances(api_client, callback_url, events)
+		if sync_result.get("success") and sync_result.get("total_instances", 0) > 0:
+			configured_count = sync_result.get("configured", 0)
+			total_count = sync_result.get("total_instances", 0)
+			logger.info(
+				"Webhook sync completed on attempt %d: configured %d/%d instances",
+				attempt,
+				configured_count,
+				total_count,
+			)
+			return
+
+		logger.warning(
+			"Webhook sync attempt %d/%d not ready yet; retrying in %.1f seconds",
+			attempt,
+			max_attempts,
+			delay_seconds,
+		)
+		time.sleep(delay_seconds)
+		delay_seconds = min(delay_seconds * 1.5, 15.0)
+
+	logger.error("Webhook sync did not complete after %d attempts", max_attempts)
+
+
 def create_app() -> Flask:
 	settings = load_settings()
 
@@ -105,31 +140,13 @@ def create_app() -> Flask:
 	logger.info("Webhook endpoint ready at %s", callback_url)
 	logger.info("Subscribed events: %s", ", ".join(configured_events))
 
-	# Auto-bind webhooks to all instances on startup
-	try:
-		sync_result = sync_webhooks_for_all_instances(api_client, callback_url, configured_events)
-		if sync_result.get("success"):
-			configured_count = sync_result.get("configured", 0)
-			total_count = sync_result.get("total_instances", 0)
-			logger.info(
-				"Webhooks configured for %d/%d instances",
-				configured_count,
-				total_count,
-			)
-			if configured_count < total_count:
-				for result in sync_result.get("results", []):
-					if not result.get("success"):
-						logger.warning(
-							"Failed to configure webhook for instance %s: %s",
-							result.get("instance"),
-							result.get("error"),
-						)
-		else:
-			logger.warning("Webhook sync failed: %s", sync_result.get("error"))
-	except Exception:
-		logger.exception("Failed to sync webhooks during startup")
-		if settings.startup_fail_fast:
-			raise
+	# Auto-bind webhooks to all instances with retries so startup order does not matter.
+	threading.Thread(
+		target=_sync_webhooks_with_retries,
+		args=(api_client, callback_url, configured_events),
+		name="webhook-sync-retry",
+		daemon=True,
+	).start()
 
 	@app.before_request
 	def log_request() -> None:

@@ -54,6 +54,33 @@ class SessionManager:
                     return session
             return None
 
+    def resolve_instance_name(
+        self,
+        instance_id: str | None = None,
+        instance_name: str | None = None,
+    ) -> str | None:
+        if isinstance(instance_name, str) and instance_name.strip():
+            return instance_name.strip()
+
+        if not isinstance(instance_id, str) or not instance_id.strip():
+            return None
+
+        try:
+            instances = self._api_client.fetch_all_instances()
+        except Exception:
+            return None
+
+        for instance in instances:
+            if not isinstance(instance, dict):
+                continue
+
+            candidate_id = instance.get("id") or instance.get("instanceId")
+            candidate_name = instance.get("name") or instance.get("instanceName")
+            if candidate_id == instance_id and isinstance(candidate_name, str) and candidate_name.strip():
+                return candidate_name.strip()
+
+        return None
+
     def destroy_session(self, jid: str) -> bool:
         with self._lock:
             return self._sessions.pop(jid, None) is not None

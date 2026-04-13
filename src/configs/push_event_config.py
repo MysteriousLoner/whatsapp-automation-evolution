@@ -61,10 +61,16 @@ def _dig_message_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
-def _extract_instance_name(payload: dict[str, Any]) -> str | None:
+def _extract_instance_name(payload: dict[str, Any], session_manager: SessionManager) -> str | None:
     direct_instance = payload.get("instance")
     if isinstance(direct_instance, str) and direct_instance.strip():
         return direct_instance.strip()
+
+    instance_id = payload.get("instanceId")
+    if isinstance(instance_id, str) and instance_id.strip():
+        resolved_instance = session_manager.resolve_instance_name(instance_id=instance_id.strip())
+        if resolved_instance:
+            return resolved_instance
 
     data = payload.get("data")
     if isinstance(data, dict):
@@ -107,7 +113,7 @@ def handle_messages_upsert(payload: dict[str, Any], session_manager: SessionMana
         logger.warning("MESSAGES_UPSERT ignored: missing remoteJid")
         return {"handled": False, "reason": "missing_remote_jid"}
 
-    instance_name = _extract_instance_name(payload)
+    instance_name = _extract_instance_name(payload, session_manager)
     session = session_manager.create_or_update_session(
         jid.strip(),
         message_payload,

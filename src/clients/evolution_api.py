@@ -40,6 +40,13 @@ class EvolutionApiClient:
             )
             response.raise_for_status()
         except requests.RequestException as exc:
+            response_text = None
+            if isinstance(exc, requests.HTTPError) and getattr(exc, "response", None) is not None:
+                response_text = exc.response.text
+
+            if response_text:
+                raise RuntimeError(f"Evolution API request failed for {endpoint}: {exc}; response={response_text}") from exc
+
             raise RuntimeError(f"Evolution API request failed for {endpoint}: {exc}") from exc
 
         if not response.text:
