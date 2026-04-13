@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -70,8 +69,8 @@ def _parse_llm_json(content: str) -> dict[str, Any] | None:
     return None
 
 
-def _build_contract_url(token: str) -> str:
-    return f"http://localhost:8080/contract/{token}"
+def _build_contract_url(base_url: str, token: str) -> str:
+    return f"{base_url}/contract/{token}"
 
 
 def on_message_received(
@@ -87,17 +86,17 @@ def on_message_received(
     # Keep processing even when fromMe is true because some deployments
     # (for example self-chat or mirrored device flows) still need automation.
 
-    allowed_jids = {
-        "60146600828@s.whatsapp.net",
-        "60123226431@s.whatsapp.net",
-    }
-    if session.jid not in allowed_jids:
-        return {
-            "handled": False,
-            "reason": "jid_not_allowed",
-            "jid": session.jid,
-            "message_id": message_id,
-        }
+    # allowed_jids = {
+    #     "60146600828@s.whatsapp.net",
+    #     "60123226431@s.whatsapp.net",
+    # }
+    # if session.jid not in allowed_jids:
+    #     return {
+    #         "handled": False,
+    #         "reason": "jid_not_allowed",
+    #         "jid": session.jid,
+    #         "message_id": message_id,
+    #     }
 
     if not extracted_text.strip():
         return {
@@ -111,7 +110,7 @@ def on_message_received(
     session.add_chat_entry("user", extracted_text)
 
     if session.awaiting_contract_signature and session.contract_token:
-        contract_url = _build_contract_url(session.contract_token)
+        contract_url = _build_contract_url(session.contract_base_url, session.contract_token)
         reminder = (
             "Your selected property is pending signature. "
             f"Please complete the contract here: {contract_url}"
@@ -191,7 +190,16 @@ def on_message_received(
 
         not_allowed = session.selected_property.get("not_allowed", [])
         red_lines = ", ".join(not_allowed) if isinstance(not_allowed, list) else "Not specified"
-        contract_url = _build_contract_url(session.contract_token)
+        contract_url = _build_contract_url(session.contract_base_url, session.contract_token)
+        if session.contract_store is not None:
+            session.contract_store.upsert_pending_contract(
+                token=session.contract_token,
+                jid=session.jid,
+                mode=session.active_mode,
+                property_address=str(session.selected_property.get("address", "")).strip() or None,
+                property_location=str(session.selected_property.get("location", "")).strip() or None,
+                contract_url=contract_url,
+            )
         contract_message = (
             "Great, I have locked your selected property. "
             f"Owner red lines (not allowed): {red_lines}. "

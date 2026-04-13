@@ -1,4 +1,5 @@
 import os
+import socket
 from dataclasses import dataclass
 
 from dotenv import load_dotenv
@@ -21,6 +22,8 @@ class Settings:
     webhook_path: str
     webhook_by_events: bool
     webhook_base64: bool
+    contract_public_base_url: str
+    contract_db_path: str
     startup_fail_fast: bool
     log_level: str
 
@@ -60,6 +63,19 @@ def _optional_env(name: str, default: str) -> str:
 
 def _normalize_url(url: str) -> str:
     return url.rstrip("/")
+
+
+def _resolve_host_ip() -> str:
+    # Uses UDP socket trick to discover the primary outbound local IP without sending traffic.
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.connect(("8.8.8.8", 80))
+        host_ip = sock.getsockname()[0]
+        return host_ip if host_ip else "127.0.0.1"
+    except OSError:
+        return "127.0.0.1"
+    finally:
+        sock.close()
 
 
 def _normalize_path(path: str) -> str:
@@ -109,6 +125,15 @@ def load_settings() -> Settings:
     webhook_by_events = _parse_bool(os.getenv("WEBHOOK_BY_EVENTS"), default=True)
     webhook_base64 = _parse_bool(os.getenv("WEBHOOK_BASE64"), default=True)
 
+    contract_base_url_raw = os.getenv("CONTRACT_BASE_URL")
+    if contract_base_url_raw and contract_base_url_raw.strip():
+        contract_public_base_url = _normalize_url(contract_base_url_raw.strip())
+    else:
+        contract_host_ip = _optional_env("CONTRACT_HOST_IP", _resolve_host_ip())
+        contract_port = _parse_port(_optional_env("CONTRACT_PUBLIC_PORT", str(flask_port)))
+        contract_public_base_url = f"http://{contract_host_ip}:{contract_port}"
+    contract_db_path = _optional_env("CONTRACT_DB_PATH", "resources/contracts.db")
+
     startup_fail_fast = _parse_bool(os.getenv("STARTUP_FAIL_FAST"), default=True)
     log_level = _optional_env("LOG_LEVEL", "INFO").upper()
 
@@ -125,6 +150,8 @@ def load_settings() -> Settings:
         webhook_path=webhook_path,
         webhook_by_events=webhook_by_events,
         webhook_base64=webhook_base64,
+        contract_public_base_url=contract_public_base_url,
+        contract_db_path=contract_db_path,
         startup_fail_fast=startup_fail_fast,
         log_level=log_level,
     )

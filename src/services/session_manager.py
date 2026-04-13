@@ -3,11 +3,19 @@ from typing import Any
 
 from src.clients.evolution_api import EvolutionApiClient
 from src.models.session import WhatsAppSession
+from src.services.contract_store import ContractStore
 
 
 class SessionManager:
-    def __init__(self, api_client: EvolutionApiClient) -> None:
+    def __init__(
+        self,
+        api_client: EvolutionApiClient,
+        contract_base_url: str,
+        contract_store: ContractStore,
+    ) -> None:
         self._api_client = api_client
+        self._contract_base_url = contract_base_url
+        self._contract_store = contract_store
         self._sessions: dict[str, WhatsAppSession] = {}
         self._lock = threading.Lock()
 
@@ -26,6 +34,8 @@ class SessionManager:
                     api_client=self._api_client,
                     instance_name=instance_name.strip() if instance_name and instance_name.strip() else None,
                     destroy_callback=self.destroy_session,
+                    contract_base_url=self._contract_base_url,
+                    contract_store=self._contract_store,
                 )
                 self._sessions[jid] = session
             else:
@@ -55,6 +65,7 @@ class SessionManager:
                     "jid": session.jid,
                     "instance_name": session.instance_name,
                     "chat_history_count": len(session.chat_history),
+                    "active_mode": session.active_mode,
                     "awaiting_contract_signature": session.awaiting_contract_signature,
                     "contract_token": session.contract_token,
                     "selected_property": session.selected_property,
@@ -64,3 +75,7 @@ class SessionManager:
                 }
                 for session in self._sessions.values()
             ]
+
+    @property
+    def contract_store(self) -> ContractStore:
+        return self._contract_store

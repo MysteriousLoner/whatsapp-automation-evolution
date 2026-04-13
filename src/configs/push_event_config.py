@@ -2,11 +2,33 @@ import logging
 from typing import Any, Callable
 
 from src.clients.event_types import WebhookEventType
+from src.handlers.gym_message_receiver import on_message_received as on_gym_message_received
 from src.handlers.on_message_received import on_message_received
 from src.services.session_manager import SessionManager
 
 
 logger = logging.getLogger(__name__)
+
+MODE_PROPERTY = "property"
+MODE_GYM = "gym"
+MODE_COMMANDS = {"/property": MODE_PROPERTY, "/gym": MODE_GYM}
+
+
+def _mode_selection_prompt() -> str:
+    return (
+        "Please select a demo mode before we continue:\n"
+        "- /property for Property Consultant mode\n"
+        "- /gym for Gym mode\n"
+        "\n"
+        "You can switch anytime with /property or /gym. Send /cancel to reset session."
+    )
+
+
+def _normalize_command(text: str) -> str | None:
+    stripped = text.strip()
+    if not stripped.startswith("/"):
+        return None
+    return stripped.split()[0].lower()
 
 
 def _extract_event(payload: dict[str, Any]) -> str | None:
@@ -100,12 +122,62 @@ def handle_messages_upsert(payload: dict[str, Any], session_manager: SessionMana
         extracted_text[:100] if extracted_text else "(no text)",
     )
 
-    try:
-        logic_result = on_message_received(
-            session=session,
-            message_payload=message_payload,
-            extracted_text=extracted_text,
+    command = _normalize_command(extracted_text)
+    if command == "/cancel":
+        if session.awaiting_contract_signature and session.contract_token and session.contract_store is not None:
+            session.contract_store.mark_cancelled(session.contract_token)
+        session.reset_state(clear_mode=True)
+        cancel_message = (
+            "Session cleared successfully.\n"
+            "Please choose a mode to continue:\n"
+            "- /property\n"
+            "- /gym"
         )
+        session.send_message(cancel_message)
+        session.add_chat_entry("assistant", cancel_message)
+        return {
+            "handled": True,
+            "event": WebhookEventType.MESSAGES_UPSERT.value,
+            "jid": session.jid,
+            "instance_name": session.instance_name,
+            "state": "session_reset",
+        }
+
+    selected_mode = MODE_COMMANDS.get(command or "")
+    if selected_mode is not None:
+        session.reset_state(clear_mode=False)
+        session.active_mode = selected_mode
+        switch_message = (
+            "Switched to Property Consultant mode. Ask me your preferred area and budget."
+            if selected_mode == MODE_PROPERTY
+            else "Switched to Gym mode. Ask me anything about the gym services, fees, or location."
+        )
+        session.send_message(switch_message)
+        session.add_chat_entry("assistant", switch_message)
+        return {
+            "handled": True,
+            "event": WebhookEventType.MESSAGES_UPSERT.value,
+            "jid": session.jid,
+            "instance_name": session.instance_name,
+            "state": f"mode_switched_{selected_mode}",
+            "mode": selected_mode,
+        }
+
+    if session.active_mode is None:
+        prompt = _mode_selection_prompt()
+        session.send_message(prompt)
+        session.add_chat_entry("assistant", prompt)
+        return {
+            "handled": True,
+            "event": WebhookEventType.MESSAGES_UPSERT.value,
+            "jid": session.jid,
+            "instance_name": session.instance_name,
+            "state": "mode_selection_required",
+        }
+
+    try:
+        handler = on_message_received if session.active_mode == MODE_PROPERTY else on_gym_message_received
+        logic_result = handler(session=session, message_payload=message_payload, extracted_text=extracted_text)
     except Exception:
         logger.exception("Error while running on_message_received for jid=%s", session.jid)
         return {
@@ -129,6 +201,7 @@ def handle_messages_upsert(payload: dict[str, Any], session_manager: SessionMana
         "jid": session.jid,
         "instance_name": session.instance_name,
         "message": extracted_text,
+        "mode": session.active_mode,
         **logic_result,
     }
 

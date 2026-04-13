@@ -8,21 +8,18 @@ from flask import Blueprint, Response, request
 from src.services.session_manager import SessionManager
 
 
-CONTRACT_PUBLIC_BASE_URL = "http://localhost:8081"
-
-
 def _build_contract_html(
     token: str,
     jid: str,
     property_data: dict[str, Any],
-    webhook_public_url: str,
+    contract_public_base_url: str,
     error: str | None = None,
 ) -> str:
     facilities = property_data.get("facilities", []) if isinstance(property_data, dict) else []
     not_allowed = property_data.get("not_allowed", []) if isinstance(property_data, dict) else []
     facilities_html = "".join(f"<li>{item}</li>" for item in facilities)
     not_allowed_html = "".join(f"<li>{item}</li>" for item in not_allowed)
-    sign_action = f"{CONTRACT_PUBLIC_BASE_URL}/contract/{token}/sign"
+    sign_action = f"{contract_public_base_url}/contract/{token}/sign"
 
     error_html = f"<p style='color: #b42318;'><strong>{error}</strong></p>" if error else ""
 
@@ -68,20 +65,31 @@ def _build_contract_html(
 """
 
 
-def create_contract_blueprint(session_manager: SessionManager, webhook_public_url: str) -> Blueprint:
+def create_contract_blueprint(session_manager: SessionManager, contract_public_base_url: str) -> Blueprint:
     contract_bp = Blueprint("contract", __name__)
 
     @contract_bp.get("/contract/<token>")
     def view_contract(token: str) -> Response:
         session = session_manager.get_session_by_contract_token(token)
         if session is None or session.selected_property is None:
-            return Response("Contract session not found or expired.", status=404, mimetype="text/plain")
+            saved = session_manager.contract_store.get_contract(token)
+            if not saved:
+                return Response("Contract session not found or expired.", status=404, mimetype="text/plain")
+            status = str(saved.get("status") or "").lower()
+            if status == "signed":
+                signed_by = saved.get("signed_by") or "Unknown"
+                signed_at = saved.get("signed_at") or "Unknown"
+                return Response(
+                    f"Contract already signed by {signed_by} at {signed_at}.",
+                    mimetype="text/plain",
+                )
+            return Response("Contract session is not active.", status=404, mimetype="text/plain")
 
         html = _build_contract_html(
             token=token,
             jid=session.jid,
             property_data=session.selected_property,
-            webhook_public_url=webhook_public_url,
+            contract_public_base_url=contract_public_base_url,
         )
         return Response(html, mimetype="text/html")
 
@@ -99,7 +107,7 @@ def create_contract_blueprint(session_manager: SessionManager, webhook_public_ur
                 token=token,
                 jid=session.jid,
                 property_data=session.selected_property,
-                webhook_public_url=webhook_public_url,
+                contract_public_base_url=contract_public_base_url,
                 error="Please provide your name and accept the terms before signing.",
             )
             return Response(html, status=400, mimetype="text/html")
@@ -108,6 +116,8 @@ def create_contract_blueprint(session_manager: SessionManager, webhook_public_ur
         session.awaiting_contract_signature = False
         signed_at = datetime.now(timezone.utc).isoformat()
         property_address = session.selected_property.get("address", "the selected property")
+        if session.contract_store is not None:
+            session.contract_store.mark_signed(token, signer_name, signed_at=signed_at)
 
         session.send_message(
             f"Booking confirmed for {property_address}. "

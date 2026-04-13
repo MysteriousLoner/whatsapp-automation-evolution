@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from src.clients.evolution_api import EvolutionApiClient
+
+if TYPE_CHECKING:
+    from src.services.contract_store import ContractStore
 
 
 @dataclass
@@ -14,7 +17,10 @@ class WhatsAppSession:
     api_client: EvolutionApiClient
     instance_name: str | None = None
     destroy_callback: Callable[[str], bool] | None = None
+    contract_base_url: str = "http://localhost:5000"
+    contract_store: ContractStore | None = None
     chat_history: list[dict[str, str]] = field(default_factory=list)
+    active_mode: str | None = None
     selected_property: dict[str, Any] | None = None
     awaiting_contract_signature: bool = False
     contract_token: str | None = None
@@ -57,6 +63,16 @@ class WhatsAppSession:
 
     def add_chat_entry(self, role: str, content: str) -> None:
         self.chat_history.append({"role": role, "content": content})
+        self.updated_at = datetime.now(timezone.utc)
+
+    def reset_state(self, *, clear_mode: bool = True) -> None:
+        self.chat_history.clear()
+        if clear_mode:
+            self.active_mode = None
+        self.selected_property = None
+        self.awaiting_contract_signature = False
+        self.contract_token = None
+        self.signed_by = None
         self.updated_at = datetime.now(timezone.utc)
 
     def destroy(self) -> bool:

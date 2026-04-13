@@ -11,6 +11,7 @@ from src.configs.contracts import create_contract_blueprint
 from src.configs.push_event_config import enabled_events
 from src.configs.webhook import create_webhook_blueprint
 from src.middleware.server_uptime_filter import init_server_uptime_filter
+from src.services.contract_store import ContractStore
 from src.services.session_manager import SessionManager
 
 
@@ -91,7 +92,12 @@ def create_app() -> Flask:
 		logging.getLogger("werkzeug").setLevel(logging.WARNING)
 
 	api_client = EvolutionApiClient(settings)
-	session_manager = SessionManager(api_client)
+	contract_store = ContractStore(settings.contract_db_path)
+	session_manager = SessionManager(
+		api_client,
+		contract_base_url=settings.contract_public_base_url,
+		contract_store=contract_store,
+	)
 
 	callback_url = build_webhook_callback_url(settings)
 	configured_events = enabled_events()
@@ -141,7 +147,7 @@ def create_app() -> Flask:
 			auth_key=settings.authentication_api_key,
 		)
 	)
-	app.register_blueprint(create_contract_blueprint(session_manager, settings.webhook_public_url))
+	app.register_blueprint(create_contract_blueprint(session_manager, settings.contract_public_base_url))
 
 	@app.get("/health")
 	def health() -> tuple[Any, int]:
