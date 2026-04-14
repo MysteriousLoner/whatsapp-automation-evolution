@@ -108,5 +108,71 @@
     "property_type": "condominium",
     "owner_remarks": "Clean and tidy tenant preferred.",
     "not_allowed": ["Pets", "Smoking indoors", "Short-term rental (Airbnb)"]
+  },
+  {
+    "location": "Seremban, Negeri Sembilan",
+    "address": "No. 19, Jalan S2 B12, Seremban 2, 70300 Seremban, Negeri Sembilan",
+    "price_per_month_myr": 2300,
+    "availability": "Available now",
+    "description": "Double-storey terrace house near Seremban 2 township and shopping lots.",
+    "facilities": ["Auto gate", "Water heater", "Air conditioning", "2-car porch"],
+    "property_type": "house",
+    "owner_remarks": "Preferred family or working professionals.",
+    "not_allowed": ["Smoking indoors", "Subletting", "Noisy activities after 10 PM"]
+  },
+  {
+    "location": "Kuantan, Pahang",
+    "address": "Unit 11-07, Jalan Beserah, 25300 Kuantan, Pahang",
+    "price_per_month_myr": 2050,
+    "availability": "Available from 2026-05-01",
+    "description": "Partly furnished condominium with easy access to East Coast Mall and hospitals.",
+    "facilities": ["Swimming pool", "Gym", "24-hour security", "Covered parking"],
+    "property_type": "condominium",
+    "owner_remarks": "Utilities billed separately.",
+    "not_allowed": ["Pets", "Smoking", "Short-term subletting"]
+  },
+  {
+    "location": "Kangar, Perlis",
+    "address": "No. 7, Jalan Kangar Jaya 3, 01000 Kangar, Perlis",
+    "price_per_month_myr": 1450,
+    "availability": "Available now",
+    "description": "Single-storey terrace house in a quiet residential area near schools.",
+    "facilities": ["Ceiling fans", "Kitchen cabinets", "Car porch", "Store room"],
+    "property_type": "house",
+    "owner_remarks": "Long-term tenancy preferred.",
+    "not_allowed": ["Smoking indoors", "Illegal activities", "Unapproved renovation"]
+  },
+  {
+    "location": "Alor Setar, Kedah",
+    "address": "Unit C-08-03, Jalan Sultanah, 05350 Alor Setar, Kedah",
+    "price_per_month_myr": 1700,
+    "availability": "Available from 2026-04-25",
+    "description": "Modern apartment near Aman Central and key government offices.",
+    "facilities": ["Security access", "Lift", "Gym", "One parking bay"],
+    "property_type": "condominium",
+    "owner_remarks": "Suitable for couples or small families.",
+    "not_allowed": ["Pets", "Smoking indoors", "Parties"]
+  },
+  {
+    "location": "Kota Bharu, Kelantan",
+    "address": "No. 28, Jalan Sultan Yahya Petra, 15200 Kota Bharu, Kelantan",
+    "price_per_month_myr": 1600,
+    "availability": "Available now",
+    "description": "Renovated landed home close to city center and schools.",
+    "facilities": ["Air conditioning", "Water heater", "Auto gate", "2-car parking"],
+    "property_type": "house",
+    "owner_remarks": "Tenant must maintain compound cleanliness.",
+    "not_allowed": ["Smoking indoors", "Subletting", "Commercial use"]
+  },
+  {
+    "location": "Kuala Terengganu, Terengganu",
+    "address": "Unit A-09-06, Jalan Sultan Zainal Abidin, 20000 Kuala Terengganu, Terengganu",
+    "price_per_month_myr": 1850,
+    "availability": "Available from 2026-05-15",
+    "description": "Sea-breeze condominium unit near city waterfront and drawbridge area.",
+    "facilities": ["Swimming pool", "Gym", "24-hour security", "Covered parking"],
+    "property_type": "condominium",
+    "owner_remarks": "Preferred tenants with stable employment.",
+    "not_allowed": ["Pets", "Smoking", "Short-term rental"]
   }
 ]
