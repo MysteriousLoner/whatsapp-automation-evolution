@@ -108,6 +108,11 @@ def handle_messages_upsert(payload: dict[str, Any], session_manager: SessionMana
         logger.warning("MESSAGES_UPSERT ignored: missing message key")
         return {"handled": False, "reason": "missing_message_key"}
 
+    # Ignore messages sent by the bot itself (fromMe: true) to prevent echo loops
+    if key.get("fromMe") is True:
+        logger.debug("MESSAGES_UPSERT ignored: message sent by bot (fromMe=true)")
+        return {"handled": False, "reason": "bot_sent_message"}
+
     jid = key.get("remoteJid")
     if not isinstance(jid, str) or not jid.strip():
         logger.warning("MESSAGES_UPSERT ignored: missing remoteJid")
