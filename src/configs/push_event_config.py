@@ -1,6 +1,7 @@
 import hashlib
 import json
 import logging
+import time
 from typing import Any, Callable
 
 from src.clients.event_types import WebhookEventType
@@ -102,6 +103,27 @@ def _extract_text(message_payload: dict[str, Any]) -> str:
     return ""
 
 
+def _looks_like_self_message(message_payload: dict[str, Any], key: dict[str, Any]) -> bool:
+    """Best-effort self-message detection for Evolution edge cases.
+
+    Some deployments can deliver bot-originated messages with fromMe=false on mirrored devices.
+    """
+    if key.get("fromMe") is True:
+        return True
+
+    source = message_payload.get("source")
+    push_name = message_payload.get("pushName")
+    message_id = key.get("id")
+
+    if isinstance(message_id, str) and message_id.startswith("3EB0"):
+        if source in {"web", "api"}:
+            return True
+        if isinstance(push_name, str) and push_name.strip().lower() in {"você", "voce", "you"}:
+            return True
+
+    return False
+
+
 def handle_messages_upsert(payload: dict[str, Any], session_manager: SessionManager) -> dict[str, Any]:
     message_payload = _dig_message_from_payload(payload)
     key = message_payload.get("key") if isinstance(message_payload, dict) else None
@@ -110,9 +132,15 @@ def handle_messages_upsert(payload: dict[str, Any], session_manager: SessionMana
         logger.warning("MESSAGES_UPSERT ignored: missing message key")
         return {"handled": False, "reason": "missing_message_key"}
 
-    # Ignore messages sent by the bot itself (fromMe: true) to prevent echo loops
-    if key.get("fromMe") is True:
-        logger.debug("MESSAGES_UPSERT ignored: message sent by bot (fromMe=true)")
+    # Ignore messages sent by the bot itself to prevent feedback loops.
+    if _looks_like_self_message(message_payload, key):
+        logger.debug(
+            "MESSAGES_UPSERT ignored: self message detected (fromMe=%s source=%s pushName=%s id=%s)",
+            key.get("fromMe"),
+            message_payload.get("source"),
+            message_payload.get("pushName"),
+            key.get("id"),
+        )
         return {"handled": False, "reason": "bot_sent_message"}
 
     raw_jid = key.get("remoteJid")
@@ -125,6 +153,9 @@ def handle_messages_upsert(payload: dict[str, Any], session_manager: SessionMana
     message_timestamp = message_payload.get("messageTimestamp", 0)
     if not isinstance(message_timestamp, int):
         message_timestamp = int(message_timestamp) if isinstance(message_timestamp, (int, float)) else 0
+    if message_timestamp <= 0:
+        # Fall back to current unix time so logical dedupe still works.
+        message_timestamp = int(time.time())
 
     extracted_text_temp = _extract_text(message_payload)
     fingerprint_seed = "|".join(
@@ -170,7 +201,7 @@ def handle_messages_upsert(payload: dict[str, Any], session_manager: SessionMana
         )
         return {"handled": False, "reason": "duplicate_message"}
 
-    if message_timestamp > 0 and session_manager.is_recent_message_key(logical_key, message_timestamp):
+    if session_manager.is_recent_message_key(logical_key, message_timestamp):
         logger.debug(
             "MESSAGES_UPSERT ignored: duplicate logical key=%s raw_jid=%s msg_id=%s ts=%s",
             logical_key,
@@ -182,8 +213,7 @@ def handle_messages_upsert(payload: dict[str, Any], session_manager: SessionMana
         return {"handled": False, "reason": "duplicate_logical_message"}
 
     session_manager.mark_fingerprint_seen(fingerprint)
-    if message_timestamp > 0:
-        session_manager.remember_message_key(logical_key, message_timestamp)
+    session_manager.remember_message_key(logical_key, message_timestamp)
 
     instance_name = _extract_instance_name(payload, session_manager)
     session = session_manager.create_or_update_session(
