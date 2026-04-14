@@ -18,7 +18,7 @@ class SessionManager:
         self._contract_store = contract_store
         self._sessions: dict[str, WhatsAppSession] = {}
         self._lock = threading.Lock()
-        self._processed_message_ids: dict[str, str] = {}  # jid -> last_processed_message_id
+        self._processed_message_ids: set[str] = set()  # Global set of processed message IDs to handle JID variants
 
     def create_or_update_session(
         self,
@@ -109,11 +109,16 @@ class SessionManager:
         return self._contract_store
 
     def is_message_already_processed(self, jid: str, message_id: str) -> bool:
-        """Check if a message with this ID has already been processed for this JID."""
+        """Check if a message with this ID has already been processed (globally)."""
         with self._lock:
-            return self._processed_message_ids.get(jid) == message_id
+            return message_id in self._processed_message_ids
 
     def mark_message_as_processed(self, jid: str, message_id: str) -> None:
-        """Mark a message as processed to prevent duplicate handling."""
+        """Mark a message as processed to prevent duplicate handling (globally)."""
         with self._lock:
-            self._processed_message_ids[jid] = message_id
+            self._processed_message_ids.add(message_id)
+            # Keep set bounded to ~10k recent messages to prevent unbounded memory growth
+            if len(self._processed_message_ids) > 10000:
+                # Remove oldest items (simple approach: clear and continue)
+                # In production, use a deque or LRU cache for better O(1) removal
+                self._processed_message_ids.clear()
