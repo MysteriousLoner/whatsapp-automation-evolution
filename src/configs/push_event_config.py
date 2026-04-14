@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 from typing import Any, Callable
@@ -114,26 +115,52 @@ def handle_messages_upsert(payload: dict[str, Any], session_manager: SessionMana
         logger.debug("MESSAGES_UPSERT ignored: message sent by bot (fromMe=true)")
         return {"handled": False, "reason": "bot_sent_message"}
 
-    jid = key.get("remoteJid")
+    raw_jid = key.get("remoteJid")
+    jid = session_manager.normalize_jid(raw_jid if isinstance(raw_jid, str) else "")
     if not isinstance(jid, str) or not jid.strip():
         logger.warning("MESSAGES_UPSERT ignored: missing remoteJid")
         return {"handled": False, "reason": "missing_remote_jid"}
 
-    # Extract message timestamp and content for deduplication
+    message_id = key.get("id") if isinstance(key.get("id"), str) else ""
     message_timestamp = message_payload.get("messageTimestamp", 0)
     if not isinstance(message_timestamp, int):
         message_timestamp = int(message_timestamp) if isinstance(message_timestamp, (int, float)) else 0
-    
+
     extracted_text_temp = _extract_text(message_payload)
-    
-    # Check if we've already processed this exact message (same timestamp + content)
-    if session_manager.is_message_already_processed(jid, message_timestamp, extracted_text_temp):
-        logger.debug("MESSAGES_UPSERT ignored: duplicate message (already processed timestamp=%s, content=%s)", 
-                     message_timestamp, extracted_text_temp[:30])
+    fingerprint_seed = "|".join(
+        [
+            jid,
+            str(message_timestamp),
+            message_id.strip(),
+            extracted_text_temp.strip(),
+        ]
+    )
+    fingerprint = hashlib.sha1(fingerprint_seed.encode("utf-8")).hexdigest()
+
+    logger.debug(
+        "Webhook identity: raw_jid=%s remoteJidAlt=%s addressingMode=%s normalized_jid=%s msg_id=%s ts=%s source=%s status=%s text=%r fingerprint=%s",
+        raw_jid,
+        key.get("remoteJidAlt"),
+        key.get("addressingMode"),
+        jid,
+        message_id,
+        message_timestamp,
+        message_payload.get("source"),
+        message_payload.get("status"),
+        extracted_text_temp[:80],
+        fingerprint,
+    )
+
+    if session_manager.is_fingerprint_seen(fingerprint):
+        logger.debug(
+            "MESSAGES_UPSERT ignored: duplicate fingerprint=%s raw_jid=%s msg_id=%s",
+            fingerprint,
+            raw_jid,
+            message_id,
+        )
         return {"handled": False, "reason": "duplicate_message"}
-    
-    # Mark as processed
-    session_manager.mark_message_as_processed(jid, message_timestamp, extracted_text_temp)
+
+    session_manager.mark_fingerprint_seen(fingerprint)
 
     instance_name = _extract_instance_name(payload, session_manager)
     session = session_manager.create_or_update_session(
@@ -144,10 +171,13 @@ def handle_messages_upsert(payload: dict[str, Any], session_manager: SessionMana
     extracted_text = _extract_text(message_payload)
 
     logger.info(
-        "Message received from %s (instance=%s): '%s'",
+        "Message received from %s (instance=%s): '%s' [msg_id=%s fingerprint=%s raw_jid=%s]",
         session.jid,
         session.instance_name,
         extracted_text[:100] if extracted_text else "(no text)",
+        message_id,
+        fingerprint,
+        raw_jid,
     )
 
     command = _normalize_command(extracted_text)

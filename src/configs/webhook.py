@@ -46,6 +46,12 @@ def create_webhook_blueprint(session_manager: SessionManager, auth_key: str) -> 
             return jsonify({"ok": False, "error": "Invalid JSON payload"}), 400
 
         logger.debug("Webhook payload event/type: event=%s, type=%s", payload.get("event"), payload.get("type"))
+        logger.debug(
+            "Webhook transport metadata: instance=%s sender=%s apikey_suffix=%s",
+            payload.get("instance"),
+            payload.get("sender"),
+            str(payload.get("apikey", ""))[-6:],
+        )
         
         result = dispatch_event(payload, session_manager)
         if result.get("handled"):
