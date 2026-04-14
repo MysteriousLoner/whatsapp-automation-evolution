@@ -137,8 +137,17 @@ def handle_messages_upsert(payload: dict[str, Any], session_manager: SessionMana
     )
     fingerprint = hashlib.sha1(fingerprint_seed.encode("utf-8")).hexdigest()
 
+    logical_key_seed = "|".join(
+        [
+            jid,
+            _normalize_command(extracted_text_temp) or "",
+            extracted_text_temp.strip().lower(),
+        ]
+    )
+    logical_key = hashlib.sha1(logical_key_seed.encode("utf-8")).hexdigest()
+
     logger.debug(
-        "Webhook identity: raw_jid=%s remoteJidAlt=%s addressingMode=%s normalized_jid=%s msg_id=%s ts=%s source=%s status=%s text=%r fingerprint=%s",
+        "Webhook identity: raw_jid=%s remoteJidAlt=%s addressingMode=%s normalized_jid=%s msg_id=%s ts=%s source=%s status=%s text=%r fingerprint=%s logical_key=%s",
         raw_jid,
         key.get("remoteJidAlt"),
         key.get("addressingMode"),
@@ -149,6 +158,7 @@ def handle_messages_upsert(payload: dict[str, Any], session_manager: SessionMana
         message_payload.get("status"),
         extracted_text_temp[:80],
         fingerprint,
+        logical_key,
     )
 
     if session_manager.is_fingerprint_seen(fingerprint):
@@ -160,7 +170,20 @@ def handle_messages_upsert(payload: dict[str, Any], session_manager: SessionMana
         )
         return {"handled": False, "reason": "duplicate_message"}
 
+    if message_timestamp > 0 and session_manager.is_recent_message_key(logical_key, message_timestamp):
+        logger.debug(
+            "MESSAGES_UPSERT ignored: duplicate logical key=%s raw_jid=%s msg_id=%s ts=%s",
+            logical_key,
+            raw_jid,
+            message_id,
+            message_timestamp,
+        )
+        session_manager.mark_fingerprint_seen(fingerprint)
+        return {"handled": False, "reason": "duplicate_logical_message"}
+
     session_manager.mark_fingerprint_seen(fingerprint)
+    if message_timestamp > 0:
+        session_manager.remember_message_key(logical_key, message_timestamp)
 
     instance_name = _extract_instance_name(payload, session_manager)
     session = session_manager.create_or_update_session(

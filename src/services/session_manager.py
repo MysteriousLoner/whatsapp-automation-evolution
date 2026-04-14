@@ -20,6 +20,7 @@ class SessionManager:
         self._sessions: dict[str, WhatsAppSession] = {}
         self._lock = threading.Lock()
         self._seen_fingerprints: set[str] = set()
+        self._recent_message_keys: dict[str, int] = {}
 
     @staticmethod
     def normalize_jid(jid: str) -> str:
@@ -106,6 +107,23 @@ class SessionManager:
             # Prevent unbounded growth.
             if len(self._seen_fingerprints) > 50000:
                 self._seen_fingerprints.clear()
+
+    def is_recent_message_key(self, key: str, timestamp: int, window_seconds: int = 20) -> bool:
+        with self._lock:
+            seen_ts = self._recent_message_keys.get(key)
+            if seen_ts is None:
+                return False
+            return abs(timestamp - seen_ts) <= window_seconds
+
+    def remember_message_key(self, key: str, timestamp: int) -> None:
+        with self._lock:
+            self._recent_message_keys[key] = timestamp
+            # Prune old entries to keep memory bounded.
+            if len(self._recent_message_keys) > 50000:
+                cutoff = timestamp - 300
+                self._recent_message_keys = {
+                    k: ts for k, ts in self._recent_message_keys.items() if ts >= cutoff
+                }
 
     def destroy_session(self, jid: str) -> bool:
         canonical_jid = self.normalize_jid(jid)
