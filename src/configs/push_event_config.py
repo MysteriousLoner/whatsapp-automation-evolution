@@ -1,3 +1,5 @@
+import hashlib
+import json
 import logging
 from typing import Any, Callable
 
@@ -118,15 +120,20 @@ def handle_messages_upsert(payload: dict[str, Any], session_manager: SessionMana
         logger.warning("MESSAGES_UPSERT ignored: missing remoteJid")
         return {"handled": False, "reason": "missing_remote_jid"}
 
-    # Extract message ID for deduplication
+    # Extract message ID for deduplication (use hash of key if ID is missing)
     message_id = key.get("id")
-    if isinstance(message_id, str) and message_id.strip():
-        # Check if we've already processed this exact message
-        if session_manager.is_message_already_processed(jid, message_id):
-            logger.debug("MESSAGES_UPSERT ignored: duplicate message (already processed message_id=%s)", message_id)
-            return {"handled": False, "reason": "duplicate_message_id"}
-        # Mark as processed
-        session_manager.mark_message_as_processed(jid, message_id)
+    if not isinstance(message_id, str) or not message_id.strip():
+        # Fallback: hash the entire key to create a unique identifier
+        key_str = json.dumps(key, sort_keys=True, default=str)
+        message_id = hashlib.md5(key_str.encode()).hexdigest()
+        logger.debug("No message ID found, using hash: %s", message_id)
+    
+    # Check if we've already processed this exact message
+    if session_manager.is_message_already_processed(jid, message_id):
+        logger.debug("MESSAGES_UPSERT ignored: duplicate message (already processed message_id=%s)", message_id)
+        return {"handled": False, "reason": "duplicate_message_id"}
+    # Mark as processed
+    session_manager.mark_message_as_processed(jid, message_id)
 
     instance_name = _extract_instance_name(payload, session_manager)
     session = session_manager.create_or_update_session(
