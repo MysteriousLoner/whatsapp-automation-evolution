@@ -141,7 +141,7 @@ def on_message_received(
         user_input=user_prompt,
         system_prompt=SYSTEM_PROMPT,
         temperature=0.2,
-        max_tokens=500,
+        max_tokens=5000,
     )
 
     if not llm_result.get("ok"):
