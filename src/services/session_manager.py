@@ -1,3 +1,5 @@
+import hashlib
+import re
 import threading
 from typing import Any
 
@@ -16,9 +18,22 @@ class SessionManager:
         self._api_client = api_client
         self._contract_base_url = contract_base_url
         self._contract_store = contract_store
-        self._sessions: dict[str, WhatsAppSession] = {}
+        self._sessions: dict[str, WhatsAppSession] = {}  # canonical_jid -> session
         self._lock = threading.Lock()
-        self._processed_message_ids: set[str] = set()  # Global set of processed message IDs to handle JID variants
+        self._processed_messages: dict[str, tuple[int, str]] = {}  # canonical_jid -> (timestamp, content_hash)
+
+    @staticmethod
+    def _normalize_jid(jid: str) -> str:
+        """Normalize JID to canonical form (extract phone number, ignore :XX variants)."""
+        if not isinstance(jid, str):
+            return jid
+        # Extract base number before @ or :
+        # Examples: 60123226431@s.whatsapp.net → 60123226431
+        #           60123226431:72@s.whatsapp.net → 60123226431
+        match = re.match(r'^(\d+)(?:[:@]|$)', jid)
+        if match:
+            return match.group(1)
+        return jid
 
     def create_or_update_session(
         self,
@@ -26,8 +41,9 @@ class SessionManager:
         message_payload: dict[str, Any],
         instance_name: str | None = None,
     ) -> WhatsAppSession:
+        canonical_jid = self._normalize_jid(jid)
         with self._lock:
-            session = self._sessions.get(jid)
+            session = self._sessions.get(canonical_jid)
             if session is None:
                 session = WhatsAppSession(
                     jid=jid,
@@ -38,15 +54,16 @@ class SessionManager:
                     contract_base_url=self._contract_base_url,
                     contract_store=self._contract_store,
                 )
-                self._sessions[jid] = session
+                self._sessions[canonical_jid] = session
             else:
                 session.update_message(message_payload, instance_name=instance_name)
 
             return session
 
     def get_session(self, jid: str) -> WhatsAppSession | None:
+            canonical_jid = self._normalize_jid(jid)
         with self._lock:
-            return self._sessions.get(jid)
+            return self._sessions.get(canonical_jid)
 
     def get_session_by_contract_token(self, token: str) -> WhatsAppSession | None:
         with self._lock:
@@ -84,7 +101,26 @@ class SessionManager:
 
     def destroy_session(self, jid: str) -> bool:
         with self._lock:
-            return self._sessions.pop(jid, None) is not None
+            canonical_jid = self._normalize_jid(jid)
+            return self._sessions.pop(canonical_jid, None) is not None
+
+    def is_message_already_processed(self, jid: str, timestamp: int, content: str) -> bool:
+        """Check if message was already processed (based on timestamp + content hash)."""
+        canonical_jid = self._normalize_jid(jid)
+        with self._lock:
+            if canonical_jid not in self._processed_messages:
+                return False
+            last_ts, last_hash = self._processed_messages[canonical_jid]
+            # If timestamps are close (within 5 seconds) and content matches, it's a duplicate
+            content_hash = hashlib.md5(content.encode()).hexdigest()
+            return abs(last_ts - timestamp) < 5 and last_hash == content_hash
+
+    def mark_message_as_processed(self, jid: str, timestamp: int, content: str) -> None:
+        """Mark a message as processed (store timestamp + content hash)."""
+        canonical_jid = self._normalize_jid(jid)
+        with self._lock:
+            content_hash = hashlib.md5(content.encode()).hexdigest()
+            self._processed_messages[canonical_jid] = (timestamp, content_hash)
 
     def list_sessions(self) -> list[dict[str, Any]]:
         with self._lock:

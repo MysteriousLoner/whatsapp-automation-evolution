@@ -1,4 +1,3 @@
-import hashlib
 import json
 import logging
 from typing import Any, Callable
@@ -120,20 +119,21 @@ def handle_messages_upsert(payload: dict[str, Any], session_manager: SessionMana
         logger.warning("MESSAGES_UPSERT ignored: missing remoteJid")
         return {"handled": False, "reason": "missing_remote_jid"}
 
-    # Extract message ID for deduplication (use hash of key if ID is missing)
-    message_id = key.get("id")
-    if not isinstance(message_id, str) or not message_id.strip():
-        # Fallback: hash the entire key to create a unique identifier
-        key_str = json.dumps(key, sort_keys=True, default=str)
-        message_id = hashlib.md5(key_str.encode()).hexdigest()
-        logger.debug("No message ID found, using hash: %s", message_id)
+    # Extract message timestamp and content for deduplication
+    message_timestamp = message_payload.get("messageTimestamp", 0)
+    if not isinstance(message_timestamp, int):
+        message_timestamp = int(message_timestamp) if isinstance(message_timestamp, (int, float)) else 0
     
-    # Check if we've already processed this exact message
-    if session_manager.is_message_already_processed(jid, message_id):
-        logger.debug("MESSAGES_UPSERT ignored: duplicate message (already processed message_id=%s)", message_id)
-        return {"handled": False, "reason": "duplicate_message_id"}
+    extracted_text_temp = _extract_text(message_payload)
+    
+    # Check if we've already processed this exact message (same timestamp + content)
+    if session_manager.is_message_already_processed(jid, message_timestamp, extracted_text_temp):
+        logger.debug("MESSAGES_UPSERT ignored: duplicate message (already processed timestamp=%s, content=%s)", 
+                     message_timestamp, extracted_text_temp[:30])
+        return {"handled": False, "reason": "duplicate_message"}
+    
     # Mark as processed
-    session_manager.mark_message_as_processed(jid, message_id)
+    session_manager.mark_message_as_processed(jid, message_timestamp, extracted_text_temp)
 
     instance_name = _extract_instance_name(payload, session_manager)
     session = session_manager.create_or_update_session(
