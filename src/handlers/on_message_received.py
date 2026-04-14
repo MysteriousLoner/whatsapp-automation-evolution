@@ -128,6 +128,14 @@ def on_message_received(
     units = _load_units()
     history_text = _history_as_text(session.chat_history)
 
+    sample_locations = [str(item.get("location", "")).strip() for item in units[:5] if isinstance(item, dict)]
+    logger.debug(
+        "Property LLM context prepared: units_count=%d sample_locations=%s history_chars=%d",
+        len(units),
+        sample_locations,
+        len(history_text),
+    )
+
     llm = QueryLLM()
     user_prompt = (
         "Conversation history:\n"
@@ -137,11 +145,23 @@ def on_message_received(
         "Decide the best next assistant reply based on user intent. "
         "Return strict JSON only."
     )
+    logger.debug(
+        "Property LLM payload size: prompt_chars=%d units_json_chars=%d",
+        len(user_prompt),
+        len(json.dumps(units, ensure_ascii=False)),
+    )
     llm_result = llm.query(
         user_input=user_prompt,
         system_prompt=SYSTEM_PROMPT,
         temperature=0.2,
         max_tokens=5000,
+    )
+
+    logger.debug(
+        "Property LLM response meta: ok=%s usage=%s has_content=%s",
+        llm_result.get("ok"),
+        llm_result.get("usage"),
+        isinstance(llm_result.get("content"), str) and bool(llm_result.get("content", "").strip()),
     )
 
     if not llm_result.get("ok"):
