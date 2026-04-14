@@ -104,24 +104,11 @@ def _extract_text(message_payload: dict[str, Any]) -> str:
 
 
 def _looks_like_self_message(message_payload: dict[str, Any], key: dict[str, Any]) -> bool:
-    """Best-effort self-message detection for Evolution edge cases.
+    """Detect bot-originated events using Evolution's authoritative flag only.
 
-    Some deployments can deliver bot-originated messages with fromMe=false on mirrored devices.
+    Heuristics based on source/pushName/message ID can misclassify genuine inbound user messages.
     """
-    if key.get("fromMe") is True:
-        return True
-
-    source = message_payload.get("source")
-    push_name = message_payload.get("pushName")
-    message_id = key.get("id")
-
-    if isinstance(message_id, str) and message_id.startswith("3EB0"):
-        if source in {"web", "api"}:
-            return True
-        if isinstance(push_name, str) and push_name.strip().lower() in {"você", "voce", "you"}:
-            return True
-
-    return False
+    return key.get("fromMe") is True
 
 
 def handle_messages_upsert(payload: dict[str, Any], session_manager: SessionManager) -> dict[str, Any]:
