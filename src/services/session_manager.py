@@ -18,6 +18,7 @@ class SessionManager:
         self._contract_store = contract_store
         self._sessions: dict[str, WhatsAppSession] = {}
         self._lock = threading.Lock()
+        self._processed_message_ids: dict[str, str] = {}  # jid -> last_processed_message_id
 
     def create_or_update_session(
         self,
@@ -106,3 +107,13 @@ class SessionManager:
     @property
     def contract_store(self) -> ContractStore:
         return self._contract_store
+
+    def is_message_already_processed(self, jid: str, message_id: str) -> bool:
+        """Check if a message with this ID has already been processed for this JID."""
+        with self._lock:
+            return self._processed_message_ids.get(jid) == message_id
+
+    def mark_message_as_processed(self, jid: str, message_id: str) -> None:
+        """Mark a message as processed to prevent duplicate handling."""
+        with self._lock:
+            self._processed_message_ids[jid] = message_id

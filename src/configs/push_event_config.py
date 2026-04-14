@@ -118,6 +118,16 @@ def handle_messages_upsert(payload: dict[str, Any], session_manager: SessionMana
         logger.warning("MESSAGES_UPSERT ignored: missing remoteJid")
         return {"handled": False, "reason": "missing_remote_jid"}
 
+    # Extract message ID for deduplication
+    message_id = key.get("id")
+    if isinstance(message_id, str) and message_id.strip():
+        # Check if we've already processed this exact message
+        if session_manager.is_message_already_processed(jid, message_id):
+            logger.debug("MESSAGES_UPSERT ignored: duplicate message (already processed message_id=%s)", message_id)
+            return {"handled": False, "reason": "duplicate_message_id"}
+        # Mark as processed
+        session_manager.mark_message_as_processed(jid, message_id)
+
     instance_name = _extract_instance_name(payload, session_manager)
     session = session_manager.create_or_update_session(
         jid.strip(),
